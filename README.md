@@ -1,4 +1,4 @@
-# Brain MRI Image Segmentation with U-Net
+# Brain MRI Image Segmentation with U-Net - Deep Learning
 
 
 ## Table of contents
