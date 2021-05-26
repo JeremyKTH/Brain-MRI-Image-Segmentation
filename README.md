@@ -1,5 +1,5 @@
 # Brain MRI Image Segmentation with U-Net
-This network architecture in this project is based on the original U-Net publication [U-Net: ConvolutionalNetworks for Biomedical Image Segmentation](https://arxiv.org/pdf/1505.04597.pdf). The codes in this repo are mainly developed in Python and GoogleColab.
+The network architecture in this project is based on the original U-Net publication [U-Net: ConvolutionalNetworks for Biomedical Image Segmentation](https://arxiv.org/pdf/1505.04597.pdf). The codes in this repo are mainly developed in Python and GoogleColab.
 
 ## Table of contents
 
