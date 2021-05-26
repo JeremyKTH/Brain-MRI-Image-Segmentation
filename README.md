@@ -14,6 +14,7 @@ This network architecture in this project is based on the original U-Net publica
 
 ## Introduction
 The U-Net architecture of this project consists of an encoder and a decoder part that together givethe network an U-shaped form. The encoder part follows a traditional architecture of aconvolutional network. Each layer consists of a repeated 3x3 padded double convolutions, followed by batch normalization and a rectifier linear units (ReLU) activation.  The output feature map is stored as a skip connection which will later be concatenated to the decoder part. Moving downwardsthrough the network, a down sampling is performed by a 2x2 max pooling operation with a stride of2, which doubles the number of feature channels.
+
 ![UNet](https://github.com/JeremyKTH/Brain-MRI-Image-Segmentation/blob/main/UNET-architecture%20.jpg)
 
 ## Dataset
