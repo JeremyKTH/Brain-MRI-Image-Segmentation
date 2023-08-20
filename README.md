@@ -22,5 +22,5 @@ Where:
 - Python  3.6
 - PyTorch 1.8.1
 
-# Contacts
+## Contacts
 Gabriele Lagani: gabriele.lagani@phd.unipi.it
