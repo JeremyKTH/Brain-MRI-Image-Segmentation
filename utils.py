@@ -17,8 +17,10 @@ def format_time(seconds):
 # Transforms shape tuple to size by multiplying the shape values
 def shape2size(shape):
 	size = 1
-	for s in shape: size *= s
+	for s in shape:
+		size *= s
 	return size
+
 
 # Save data to csv file
 def update_csv(results, path):
@@ -29,20 +31,24 @@ def update_csv(results, path):
 			writer.writerow([name + '_epoch'] + list(entries.keys()))
 			writer.writerow([name] + list(entries.values()))
 
+
 # Save state dictionary file to specified path
 def save_dict(state_dict, path):
 	os.makedirs(os.path.dirname(path), exist_ok=True)
 	torch.save(state_dict, path)
-	
+
+
 # Load state dictionary file from specified path
 def load_dict(path):
 	torch.load(path, map_location='cpu')
-	
+
+
 # Retrieve a custom module or object provided by the user by full name in dot notation as string. If the object is a
 # dictionary, it is possible to retrieve a specific element of the dictionary with the square bracket indexing notation.
 # NB: dictionary keys must always be strings.
 def retrieve(name):
-	if name is None: return None
+	if name is None:
+		return None
 	
 	if '[' in name:
 		name, key = name.split('[', 1)
@@ -52,6 +58,7 @@ def retrieve(name):
 	
 	prefix, suffix = name.rsplit('.', 1)
 	return getattr(import_module(prefix), suffix)
+
 
 # Neural network weight initialization
 def init_weights(model):
@@ -63,6 +70,7 @@ def init_weights(model):
 		elif isinstance(m, nn.BatchNorm3d):
 			m.weight.data.fill_(1)
 			m.bias.data.zero_()
+
 
 # Count neural network parameters
 def count_params(model):
