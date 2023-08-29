@@ -110,6 +110,16 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
 
                     self.assertTrue(torch.equal(conv.weight, heb_conv.weight), "weight getter doesn't work")
 
+    def test_weight_getter_clone(self):
+        heb_conv = HebbianConvTranspose2d(5, 5, 3)
+        inp = torch.randn((1, 5, 10, 10))
+        r1 = heb_conv(inp)
+        w = heb_conv.weight
+        w.data[:, :, :, :] = 0
+        r2 = heb_conv(inp)
+
+        self.assertTrue(torch.equal(r1, r2), "weight getter doesn't work")
+
     def test_weight_setter(self):
         for in_channels in range(1, 3):
             for out_channels in range(1, 3):
