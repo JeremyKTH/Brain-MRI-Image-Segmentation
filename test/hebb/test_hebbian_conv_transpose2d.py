@@ -4,6 +4,8 @@ import torch
 
 
 class TestHebbianConvTranpose2d(unittest.TestCase):
+    __epsolon = 10**-5
+
     def test_kernel_size_conversion(self):
         heb_conv = HebbianConvTranspose2d(5, 5, 3)
         self.assertEqual(heb_conv.kernel_size, (3, 3))
@@ -55,22 +57,22 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
         except AttributeError:
             self.assertTrue(True)
 
-    # def test_padding_conversion(self):
-    #     heb_conv = HebbianConvTranspose2d(5, 5, 3, padding=3)
-    #     self.assertEqual(heb_conv.padding, (3, 3))
-    #
-    #     heb_conv = HebbianConvTranspose2d(5, 5, 3, padding=[5, 7])
-    #     self.assertEqual(heb_conv.padding, (5, 7))
-    #
-    #     heb_conv = HebbianConvTranspose2d(5, 5, 3, padding=(4, 6))
-    #     self.assertEqual(heb_conv.padding, (4, 6))
-    #
-    #     try:
-    #         HebbianConvTranspose2d(5, 5, 3, padding=[2, 3, 4])
-    #         self.assertTrue(False, "HebbianConvTranpose2d should throw an exception of type Attribute error"
-    #                                "for padding sizes longer than 2 dimension")
-    #     except AttributeError:
-    #         self.assertTrue(True)
+    def test_padding_conversion(self):
+        heb_conv = HebbianConvTranspose2d(5, 5, 3, padding=3)
+        self.assertEqual(heb_conv.padding, (3, 3))
+
+        heb_conv = HebbianConvTranspose2d(5, 5, 3, padding=[5, 7])
+        self.assertEqual(heb_conv.padding, (5, 7))
+
+        heb_conv = HebbianConvTranspose2d(5, 5, 3, padding=(4, 6))
+        self.assertEqual(heb_conv.padding, (4, 6))
+
+        try:
+            HebbianConvTranspose2d(5, 5, 3, padding=[2, 3, 4])
+            self.assertTrue(False, "HebbianConvTranpose2d should throw an exception of type Attribute error"
+                                   "for padding sizes longer than 2 dimension")
+        except AttributeError:
+            self.assertTrue(True)
     #
     #
     # def test_output_padding_conversion(self):
@@ -127,7 +129,31 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
                     inp = torch.randn(1, in_channels, 10, 10)
 
                     # Numerical issues can casue problems when directly comparing
-                    self.assertTrue(torch.all(torch.abs(heb_conv(inp) - conv(inp)) < 0.000001))
+                    self.assertTrue(
+                        torch.all(
+                            torch.abs(
+                                heb_conv(inp) - conv(inp)
+                            ).less(TestHebbianConvTranpose2d.__epsolon)
+                        )
+                    )
+
+    def test_forward_3d(self):
+        for in_channels in range(1, 3):
+            for out_channels in range(1, 3):
+                for kernel_size in range(1, 5):
+                    heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size)
+                    conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False)
+                    conv.weight = heb_conv.weight
+                    inp = torch.randn(in_channels, 10, 10)
+
+                    # Numerical issues can casue problems when directly comparing
+                    self.assertTrue(
+                        torch.all(
+                            torch.abs(
+                                heb_conv(inp) - conv(inp)
+                            ).less(TestHebbianConvTranpose2d.__epsolon)
+                        )
+                    )
 
     def test_forward_stride(self):
         for in_channels in range(1, 3):
@@ -139,7 +165,13 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
                     inp = torch.randn(1, in_channels, 10, 10)
 
                     # Numerical issues can casue problems when directly comparing
-                    self.assertTrue(torch.all(torch.abs(heb_conv(inp) - conv(inp)) < 0.000001))
+                    self.assertTrue(
+                        torch.all(
+                            torch.abs(
+                                heb_conv(inp) - conv(inp)
+                            ).less(TestHebbianConvTranpose2d.__epsolon)
+                        )
+                    )
 
     def test_forward_dilation(self):
         for in_channels in range(1, 3):
@@ -151,4 +183,70 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
                     inp = torch.randn(1, in_channels, 10, 10)
 
                     # Numerical issues can casue problems when directly comparing
-                    self.assertTrue(torch.all(torch.abs(heb_conv(inp) - conv(inp)) < 0.000001))
+                    self.assertTrue(
+                        torch.all(
+                            torch.abs(
+                                heb_conv(inp) - conv(inp)
+                            ).less(TestHebbianConvTranpose2d.__epsolon)
+                        )
+                    )
+
+        # Test everything without batching
+        for in_channels in range(1, 3):
+            for out_channels in range(1, 3):
+                for kernel_size in range(1, 5):
+                    heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size, dilation=2)
+                    conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False, dilation=2)
+                    conv.weight = heb_conv.weight
+                    inp = torch.randn(in_channels, 10, 10)
+
+                    # Numerical issues can casue problems when directly comparing
+                    self.assertTrue(
+                        torch.all(
+                            torch.abs(
+                                heb_conv(inp) - conv(inp)
+                            ).less(TestHebbianConvTranpose2d.__epsolon)
+                        )
+                    )
+
+    def test_forward_padding(self):
+        in_channels = 3
+        out_channels = 3
+        for kernel_size in range(1, 5):
+            for padding_r in range(2):
+                for padding_c in range(2):
+                    heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size,
+                                                      padding=(padding_r, padding_c))
+                    conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False,
+                                                    padding=(padding_r, padding_c))
+                    conv.weight = heb_conv.weight
+                    inp = torch.randn((1, in_channels, 10, 10))
+
+                    # Numerical issues can casue problems when directly comparing
+                    self.assertTrue(
+                        torch.all(
+                            torch.abs(
+                                heb_conv(inp) - conv(inp)
+                            ).less(TestHebbianConvTranpose2d.__epsolon)
+                        )
+                    )
+
+        # Test everything without batching
+        for kernel_size in range(1, 5):
+            for padding_r in range(2):
+                for padding_c in range(2):
+                    heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size,
+                                                      padding=(padding_r, padding_c))
+                    conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False,
+                                                    padding=(padding_r, padding_c))
+                    conv.weight = heb_conv.weight
+                    inp = torch.randn(in_channels, 10, 10)
+
+                    # Numerical issues can casue problems when directly comparing
+                    self.assertTrue(
+                        torch.all(
+                            torch.abs(
+                                heb_conv(inp) - conv(inp)
+                            ).less(TestHebbianConvTranpose2d.__epsolon)
+                        )
+                    )

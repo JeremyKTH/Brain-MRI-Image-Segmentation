@@ -46,10 +46,7 @@ class HebbianConvTranspose2d(torch.nn.Module):
         self.__output_padding = to_2dvector(output_padding, 'output_padding')
 
         # TODO: Implement these
-        if torch.equal(self.__padding, torch.tensor([1, 1])):
-            raise NotImplementedError("Padding different from 1 not implemented")
-
-        if torch.equal(self.__padding, torch.tensor([1, 1])):
+        if torch.equal(self.__output_padding, torch.tensor([1, 1])):
             raise NotImplementedError("Output Padding different from 1 not implemented")
 
         self.__weight = torch.nn.init.xavier_normal_(
@@ -75,19 +72,53 @@ class HebbianConvTranspose2d(torch.nn.Module):
                                         stride=1)
 
     def __calc_output_size(self, input_size: tuple):
-        return (torch.tensor(input_size) - 1) * self.__stride - 2 * self.__padding + \
+        # ignore output_padding
+        return (torch.tensor(input_size) - 1) * self.__stride + \
                 self.__dilation * (self.__kernel_size - 1) + self.__output_padding + 1
 
     def forward(self, x):
+        # Get input shape and verify tensor dimensionality
         input_size = x.size()
+        tensor_dim = len(input_size)
+        if tensor_dim != 3 and tensor_dim != 4:
+            raise RuntimeError(f'Expected 3D (unbatched) or 4D (batched) input to HebbianConvTransposed2D but got size'
+                               f' {input_size}')
+
+        # Calculate output shape for 3D and 4D tensors
         output_shape = torch.Size((
             input_size[0],
             self.out_channels,
-            *self.__calc_output_size(input_size[2:])))
-        return torch.matmul(
+            *self.__calc_output_size(input_size[2:]))) if tensor_dim == 4 else torch.Size((
+                self.out_channels,
+                *self.__calc_output_size(input_size[2:])))
+
+        # Evalueate transposed convolution
+        unpadded_result = torch.matmul(
                 self.__weight,
                 self.__unfold(self.__upscale(x))
             ).reshape(output_shape)
+
+        # Return padded result according to tensor shape and dimensionality
+        # Probably there is a better way to do this
+        if torch.all(self.__padding.eq(0)):
+            return unpadded_result
+        elif self.__padding[0] == 0:
+            if tensor_dim == 3:
+                return unpadded_result[:, :, self.__padding[1]:-self.__padding[-1]]
+            else:
+                return unpadded_result[:, :, :, self.__padding[1]:-self.__padding[-1]]
+        elif self.__padding[1] == 0:
+            if tensor_dim == 3:
+                return unpadded_result[:, self.__padding[0]:-self.__padding[-0], :]
+            else:
+                return unpadded_result[:, :, self.__padding[0]:-self.__padding[-0], :]
+        else:
+            if tensor_dim == 3:
+                return unpadded_result[:, self.__padding[0]:-self.__padding[-0],
+                                       self.__padding[1]:-self.__padding[-1]]
+            else:
+                return unpadded_result[:, :, self.__padding[0]:-self.__padding[-0],
+                                       self.__padding[1]:-self.__padding[-1]]
 
     @property
     def kernel_size(self):
@@ -111,6 +142,7 @@ class HebbianConvTranspose2d(torch.nn.Module):
 
     @property
     def weight(self):
+        # TODO: Clone the weight before returning
         # Convert internal representation of weights in format appropreate for ConvTranposed2d
         return torch.nn.Parameter(
             self.__weight.reshape(
