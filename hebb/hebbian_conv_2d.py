@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.modules.utils import _pair
+import torch.nn.functional as f
+
+from hebb.hebbian_update_rule import soft_winner_takes_all
+from hebb.hebbian_update_rule import hebbian_pca
+from hebb.hebbian_update_rule import HebbianUpdateMode
 
 
 class HebbianConv2d(nn.Module):
@@ -9,12 +12,9 @@ class HebbianConv2d(nn.Module):
     A 2d convolutional layer that learns through Hebbian plasticity
     """
 
-    MODE_SWTA = 'swta'
-    MODE_HPCA = 'hpca'
-
     def __init__(self, out_channels, in_channels, kernel_size, stride,
                  w_nrm=True, act=nn.ReLU(inplace=True),
-                 mode=MODE_SWTA, k=0.02, patchwise=True):
+                 mode=HebbianUpdateMode.SoftWinnerTakesAll, k=0.02, patchwise=True):
         """
 
         :param out_channels: output channels of the convolutional kernel
@@ -34,7 +34,7 @@ class HebbianConv2d(nn.Module):
         self.mode = mode
         self.out_channels = out_channels
         self.in_channels = in_channels
-        self.kernel_size = _pair(kernel_size)
+        self.kernel_size = (kernel_size, kernel_size) if type(kernel_size) == int else tuple(kernel_size)
         self.stride = stride
 
         self.weight = nn.Parameter(torch.empty((out_channels, in_channels, *kernel_size)), requires_grad=True)
@@ -61,7 +61,8 @@ class HebbianConv2d(nn.Module):
             nrm_w[nrm_w == 0] = 1.
             w = w / nrm_w
         y = self.act(self.apply_weights(x, w))
-        if self.training: self.update(x, y)
+        if self.training:
+            self.update(x, y)
         return y
 
     def update(self, x, y):
@@ -70,54 +71,75 @@ class HebbianConv2d(nn.Module):
         resulting weight update is stored in buffer self.delta_w for later use.
         """
 
-        if self.mode not in [self.MODE_SWTA, self.MODE_HPCA]:
-            raise NotImplementedError(
-                "Learning mode {} unavailable for {} layer".format(self.mode, self.__class__.__name__))
+        if self.mode not in [HebbianUpdateMode.HebbianPCA, HebbianUpdateMode.SoftWinnerTakesAll]:
+            raise NotImplementedError(f'Learning mode {self.mode} unavailable for layer {self.__class__.__name__}')
 
-        x_unf = F.unfold(x, kernel_size=self.kernel_size, stride=self.stride)
+        # The result of this reshape is a 2D matrix with dimensions: (batch_size * patches, kernel_size^2*channels)
+        x_unf = f.unfold(x, kernel_size=self.kernel_size, stride=self.stride)
         x_unf = x_unf.permute(0, 2, 1).reshape(-1, x_unf.size(1))
-        if self.mode == self.MODE_SWTA:
+        y_unf = y.permute(1, 0, 2, 3).reshape(self.out_channels, -1)
+
+        if self.mode == HebbianUpdateMode.SoftWinnerTakesAll:
             # Logic for swta-type learning
             if self.patchwise:
-                r = (y * self.k).softmax(dim=1).permute(1, 0, 2, 3).reshape(self.out_channels, -1)
-                dec = r.sum(1, keepdim=True) * self.weight.reshape(self.out_channels, -1)
-                self.delta_w[:, :, :, :] = (r.matmul(x_unf) - dec).reshape_as(self.weight)
+                self.delta_w[:, :, :, :] = soft_winner_takes_all(
+                    x_unf,
+                    y_unf,
+                    self.k,
+                    self.weight.reshape(self.out_channels, -1)
+                ).reshape_as(self.weight)
             else:
-                r = (y * self.k).softmax(dim=1).permute(2, 3, 1, 0).reshape(y.size(2), y.size(3), self.out_channels, -1)
-                krn = torch.eye(len(self.weight[0]), device=x.device, dtype=x.dtype).view(len(self.weight[0]),
-                                                                                          self.in_channels,
-                                                                                          *self.kernel_size)
-                dec = torch.conv_transpose2d(
-                    (r.sum(dim=-1, keepdim=True) * self.weight.reshape(1, 1, self.out_channels, -1)).permute(2, 3, 0,
-                                                                                                             1), krn,
-                    self.stride)
-                self.delta_w[:, :, :, :] = (
-                            r.permute(2, 3, 0, 1).reshape(self.out_channels, -1).matmul(x_unf) - F.unfold(dec,
-                                                                                                          kernel_size=self.kernel_size,
-                                                                                                          stride=self.stride).sum(
-                        dim=-1)).reshape_as(self.weight)
-        if self.mode == self.MODE_HPCA:
+                raise NotImplementedError("Non-patchwise learning is not implemented for SWTA ")
+                # r = (y * self.k).softmax(dim=1).permute(2, 3, 1, 0)
+                # krn = torch.eye(len(self.weight[0]), device=x.device, dtype=x.dtype).view(len(self.weight[0]),
+                #                                                                           self.in_channels,
+                #                                                                           *self.kernel_size)
+                # dec = torch.conv_transpose2d(
+                #     (
+                #             r.sum(dim=-1, keepdim=True) * self.weight.reshape(1, 1, self.out_channels, -1)
+                #      ).permute(2, 3, 0, 1),
+                #     krn,
+                #     self.stride
+                # )
+                #
+                # self.delta_w[:, :, :, :] = (
+                #         r.permute(2, 3, 0, 1).reshape(
+                #             self.out_channels,
+                #             -1
+                #         ).matmul(x_unf) - f.unfold(
+                #                             dec,
+                #                             kernel_size=self.kernel_size,
+                #                             stride=self.stride).sum(dim=-1)
+                # ).reshape_as(self.weight)
+
+        if self.mode == HebbianUpdateMode.HebbianPCA:
             # Logic for hpca-type learning
             if self.patchwise:
-                r = y.permute(1, 0, 2, 3).reshape(self.out_channels, -1)
-                l = (torch.arange(self.out_channels, device=x.device, dtype=x.dtype).unsqueeze(0).repeat(
-                    self.out_channels, 1) <= torch.arange(self.out_channels, device=x.device, dtype=x.dtype).unsqueeze(
-                    1)).to(dtype=x.dtype)
-                dec = (r.matmul(r.transpose(-2, -1)) * l).matmul(self.weight.view(self.out_channels, -1))
-                self.delta_w[:, :, :, :] = (r.matmul(x_unf) - dec).reshape_as(self.weight)
+                self.delta_w[:, :, :, :] = hebbian_pca(
+                    x_unf,
+                    y_unf,
+                    self.weight.view(self.out_channels, -1)
+                ).reshape_as(self.weight)
             else:
-                r = y.permute(2, 3, 1, 0).reshape(y.size(2), y.size(3), self.out_channels, -1)
-                l = (torch.arange(self.out_channels, device=x.device, dtype=x.dtype).unsqueeze(0).repeat(
-                    self.out_channels, 1) <= torch.arange(self.out_channels, device=x.device, dtype=x.dtype).unsqueeze(
-                    1)).to(dtype=x.dtype)
-                dec = torch.conv_transpose2d(
-                    (r.matmul(r.transpose(-2, -1)) * l.unsqueeze(0).unsqueeze(1)).permute(3, 2, 0, 1), self.weight,
-                    self.stride)
-                self.delta_w[:, :, :, :] = (
-                            r.permute(2, 3, 0, 1).reshape(self.out_channels, -1).matmul(x_unf) - F.unfold(dec,
-                                                                                                          kernel_size=self.kernel_size,
-                                                                                                          stride=self.stride).sum(
-                        dim=-1)).reshape_as(self.weight)
+                raise NotImplementedError("Non-patchwise learning is not implemented for HPCA")
+                # r = y.permute(2, 3, 1, 0)
+                # l = (torch.arange(self.out_channels, device=x.device, dtype=x.dtype).unsqueeze(0).repeat(
+                #     self.out_channels, 1) <= torch.arange(self.out_channels, device=x.device, dtype=x.dtype
+                #     ).unsqueeze(
+                #     1)).to(dtype=x.dtype)
+                # dec = torch.conv_transpose2d(
+                #     (r.matmul(r.transpose(-2, -1)) * l.unsqueeze(0).unsqueeze(1)).permute(3, 2, 0, 1), self.weight,
+                #     self.stride)
+                #
+                # self.delta_w[:, :, :, :] = (
+                #         r.permute(2, 3, 0, 1).reshape(
+                #                 self.out_channels,
+                #                 -1
+                #             ).matmul(x_unf) - f.unfold(
+                #                                 dec,
+                #                                 kernel_size=self.kernel_size,
+                #                                 stride=self.stride).sum(dim=-1)
+                # ).reshape_as(self.weight)
 
     def local_update(self, alpha=1):
         """

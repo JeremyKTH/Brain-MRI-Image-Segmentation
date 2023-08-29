@@ -1,4 +1,7 @@
 import torch
+from hebb.hebbian_update_rule import soft_winner_takes_all
+from hebb.hebbian_update_rule import hebbian_pca
+from hebb.hebbian_update_rule import HebbianUpdateMode
 
 
 def to_2dvector(param, param_name):
@@ -23,7 +26,9 @@ def to_2dvector(param, param_name):
 class HebbianConvTranspose2d(torch.nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size,
                  stride=1, padding=0, output_padding=0, groups=1, bias=False,
-                 dilation=1, padding_mode='zeros', device=None, dtype=None):
+                 dilation=1, padding_mode='zeros', device=None, dtype=None,
+                 mode=HebbianUpdateMode.SoftWinnerTakesAll, k=0.02, patchwise=True):
+
         super().__init__()
         # TODO: Add hebbian learning
         # TODO: Add padding
@@ -31,13 +36,17 @@ class HebbianConvTranspose2d(torch.nn.Module):
         self.out_channels = out_channels
 
         if padding_mode != 'zeros':
-            raise NotImplementedError("Only padding mode zeros is supported")
+            raise NotImplemented("Only padding mode zeros is supported")
 
         if bias:
-            raise NotImplementedError("Biases are not supported with hebbian learning")
+            raise NotImplemented("Biases are not supported with hebbian learning")
 
         if groups != 1:
             raise NotImplementedError("Groups different from 1 not implemented")
+
+        self.k = k
+        self.patchsize = patchwise
+        self.mode = mode
 
         self.__kernel_size = to_2dvector(kernel_size, 'kernel_size')
         self.__stride = to_2dvector(stride, 'stride')
@@ -55,6 +64,8 @@ class HebbianConvTranspose2d(torch.nn.Module):
                 dtype=dtype,
                 device=device,
                 requires_grad=True))
+
+        self.__delta_w = torch.zeros_like(self.__weight)
 
         self.__upscale = torch.nn.ConvTranspose2d(
             in_channels=in_channels,
@@ -119,6 +130,31 @@ class HebbianConvTranspose2d(torch.nn.Module):
             else:
                 return unpadded_result[:, :, self.__padding[0]:-self.__padding[-0],
                                        self.__padding[1]:-self.__padding[-1]]
+
+    def update(self, x, y):
+        if self.mode not in [HebbianUpdateMode.HebbianPCA, HebbianUpdateMode.SoftWinnerTakesAll]:
+            raise NotImplementedError(f'Learning mode {self.mode} unavailable for layer {self.__class__.__name__}')
+
+        if self.mode == HebbianUpdateMode.SoftWinnerTakesAll:
+            # Logic for swta-type learning
+            if self.patchwise:
+                self.delta_w[:, :] = soft_winner_takes_all(x,  y, self.k, self.__weight)
+            else:
+                raise NotImplementedError("Non-patchwise learning is not implemented for SWTA ")
+
+        if self.mode == HebbianUpdateMode.HebbianPCA:
+            # Logic for hpca-type learning
+            if self.patchwise:
+                self.delta_w[:, :] = hebbian_pca(x, y, self.__weight)
+            else:
+                raise NotImplementedError("Non-patchwise learning is not implemented for HPCA")
+
+    def local_update(self, alpha=1):
+        if self.__weight.grad is None:
+            self.__weight.grad = -alpha * self.__delta_w
+        else:
+            self.__weight.grad -= alpha * self.__delta_w
+        self.__delta_w.zero_()
 
     @property
     def kernel_size(self):
