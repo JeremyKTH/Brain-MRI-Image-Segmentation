@@ -29,3 +29,9 @@ def hebbian_pca(x, y, w):
     ).to(dtype=x.dtype)
 
     return y.matmul(x) - (y.matmul(y.transpose(-2, -1)) * mask).matmul(w)
+
+
+def normalize_weight(w, dim):
+    nrm_w = (w ** 2).sum(dim=dim, keepdim=True) ** 0.5
+    nrm_w[nrm_w == 0] = 1.
+    return w / nrm_w

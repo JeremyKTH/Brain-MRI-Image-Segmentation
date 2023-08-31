@@ -5,6 +5,7 @@ import torch.nn.functional as f
 from hebb.hebbian_update_rule import soft_winner_takes_all
 from hebb.hebbian_update_rule import hebbian_pca
 from hebb.hebbian_update_rule import HebbianUpdateMode
+from hebb.hebbian_update_rule import normalize_weight
 
 
 class HebbianConv2d(nn.Module):
@@ -55,11 +56,8 @@ class HebbianConv2d(nn.Module):
         return torch.conv2d(x, w, self.bias, self.stride)
 
     def forward(self, x):
-        w = self.weight
-        if self.w_nrm:
-            nrm_w = (self.weight ** 2).sum(dim=(1, 2, 3), keepdim=True) ** 0.5
-            nrm_w[nrm_w == 0] = 1.
-            w = w / nrm_w
+        w = normalize_weight(self.weight, dim=(1, 2, 3)) if self.w_nrm else self.weight
+
         y = self.act(self.apply_weights(x, w))
         if self.training:
             self.update(x, y)

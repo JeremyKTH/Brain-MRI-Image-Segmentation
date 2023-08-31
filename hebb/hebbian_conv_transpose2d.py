@@ -2,6 +2,7 @@ import torch
 from hebb.hebbian_update_rule import soft_winner_takes_all
 from hebb.hebbian_update_rule import hebbian_pca
 from hebb.hebbian_update_rule import HebbianUpdateMode
+from hebb.hebbian_update_rule import normalize_weight
 
 
 def to_2dvector(param, param_name):
@@ -27,11 +28,10 @@ class HebbianConvTranspose2d(torch.nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size,
                  stride=1, padding=0, output_padding=0, groups=1, bias=False,
                  dilation=1, padding_mode='zeros', device=None, dtype=None,
+                 w_nrm=True, act=torch.nn.ReLU(inplace=True),
                  mode=HebbianUpdateMode.SoftWinnerTakesAll, k=0.02, patchwise=True):
 
         super().__init__()
-        # TODO: Add hebbian learning
-        # TODO: Add padding
         self.in_channels = in_channels
         self.out_channels = out_channels
 
@@ -82,6 +82,9 @@ class HebbianConvTranspose2d(torch.nn.Module):
                                                                                                self.dilation)]),
                                         stride=1)
 
+        self.__act = act
+        self.__w_nrm = w_nrm
+
     def __calc_output_size(self, input_size: tuple):
         # ignore output_padding
         return (torch.tensor(input_size) - 1) * self.__stride + \
@@ -103,11 +106,16 @@ class HebbianConvTranspose2d(torch.nn.Module):
                 self.out_channels,
                 *self.__calc_output_size(input_size[2:])))
 
+        # Use normalized weights if requested
+        w = normalize_weight(self.__weight, dim=1) if self.__w_nrm else self.__weight
+
         # Evalueate transposed convolution
-        unpadded_result = torch.matmul(
-                self.__weight,
+        unpadded_result = self.__act(
+            torch.matmul(
+                w,
                 self.__unfold(self.__upscale(x))
             ).reshape(output_shape)
+        )
 
         # Return padded result according to tensor shape and dimensionality
         # Probably there is a better way to do this
@@ -178,7 +186,6 @@ class HebbianConvTranspose2d(torch.nn.Module):
 
     @property
     def weight(self):
-        # TODO: Clone the weight before returning
         # Convert internal representation of weights in format appropreate for ConvTranposed2d
         return torch.nn.Parameter(
             self.__weight.reshape(
