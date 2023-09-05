@@ -1,5 +1,6 @@
 import unittest
 from hebb import HebbianConvTranspose2d
+from hebb.unit_types import DotUnit
 import torch
 
 
@@ -134,8 +135,7 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
             for out_channels in range(1, 3):
                 for kernel_size in range(1, 5):
                     heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size,
-                                                      act=lambda x: x,
-                                                      w_nrm=False)
+                                                      unit_type=DotUnit(lambda x: x, False))
                     conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False)
                     conv.weight = heb_conv.weight
                     inp = torch.randn(1, in_channels, 10, 10)
@@ -154,8 +154,7 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
             for out_channels in range(1, 3):
                 for kernel_size in range(1, 5):
                     heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size,
-                                                      act=lambda x: x,
-                                                      w_nrm=False)
+                                                      unit_type=DotUnit(lambda x: x, False))
                     conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False)
                     conv.weight = heb_conv.weight
                     inp = torch.randn(in_channels, 10, 10)
@@ -174,8 +173,7 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
             for out_channels in range(1, 3):
                 for kernel_size in range(1, 5):
                     heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size, stride=2,
-                                                      act=lambda x: x,
-                                                      w_nrm=False)
+                                                      unit_type=DotUnit(lambda x: x, False))
                     conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False, stride=2)
                     conv.weight = heb_conv.weight
                     inp = torch.randn(1, in_channels, 10, 10)
@@ -194,8 +192,7 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
             for out_channels in range(1, 3):
                 for kernel_size in range(1, 5):
                     heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size, dilation=2,
-                                                      act=lambda x: x,
-                                                      w_nrm=False)
+                                                      unit_type=DotUnit(lambda x: x, False))
                     conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False, dilation=2)
                     conv.weight = heb_conv.weight
                     inp = torch.randn(1, in_channels, 10, 10)
@@ -214,8 +211,7 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
             for out_channels in range(1, 3):
                 for kernel_size in range(1, 5):
                     heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size, dilation=2,
-                                                      act=lambda x: x,
-                                                      w_nrm=False)
+                                                      unit_type=DotUnit(lambda x: x, False))
                     conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False, dilation=2)
                     conv.weight = heb_conv.weight
                     inp = torch.randn(in_channels, 10, 10)
@@ -237,8 +233,7 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
                 for padding_c in range(2):
                     heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size,
                                                       padding=(padding_r, padding_c),
-                                                      act=lambda x: x,
-                                                      w_nrm=False)
+                                                      unit_type=DotUnit(lambda x: x, False))
                     conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False,
                                                     padding=(padding_r, padding_c))
                     conv.weight = heb_conv.weight
@@ -259,8 +254,7 @@ class TestHebbianConvTranpose2d(unittest.TestCase):
                 for padding_c in range(2):
                     heb_conv = HebbianConvTranspose2d(in_channels, out_channels, kernel_size,
                                                       padding=(padding_r, padding_c),
-                                                      act=lambda x: x,
-                                                      w_nrm=False)
+                                                      unit_type=DotUnit(lambda x: x, False))
                     conv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, bias=False,
                                                     padding=(padding_r, padding_c))
                     conv.weight = heb_conv.weight

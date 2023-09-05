@@ -1,37 +1,27 @@
 import torch
-from enum import Enum
 
 
-class HebbianUpdateMode(Enum):
-    HebbianPCA = 1
-    SoftWinnerTakesAll = 2
-    SWTA_T = 3
-    HPCA_T = 4
-    CONTRASTIVE = 5
+class SoftWinnerTakesAll:
+    def __init__(self, inverse_temperature):
+        self.__inverse_temperature = inverse_temperature
+
+    def __call__(self, x, y, w):
+        r = (y * self.__inverse_temperature).softmax(dim=-2)
+        return torch.einsum('bjn,bin->ji', r, x) - r.sum(dim=(0, 2)).unsqueeze(1) * w
 
 
-def soft_winner_takes_all(x, y, w, inverse_temeprature):
-    r = (y * inverse_temeprature).softmax(dim=0)
-    return torch.matmul(r, x) - r.sum(1, keepdim=True) * w
+class HebbianPCA:
+    def __call__(self, x, y, w):
+        out_channels = y.size()[0]
+        mask = torch.arange(
+            out_channels,
+            device=x.device,
+            dtype=x.dtype
+        ).unsqueeze(0).repeat(
+            out_channels,
+            1
+        ).le(
+            torch.arange(out_channels, device=x.device, dtype=x.dtype).unsqueeze(1)
+        ).to(dtype=x.dtype)
 
-
-def hebbian_pca(x, y, w):
-    out_channels = y.size()[0]
-    mask = torch.arange(
-        out_channels,
-        device=x.device,
-        dtype=x.dtype
-    ).unsqueeze(0).repeat(
-        out_channels,
-        1
-    ).le(
-        torch.arange(out_channels, device=x.device, dtype=x.dtype).unsqueeze(1)
-    ).to(dtype=x.dtype)
-
-    return y.matmul(x) - (y.matmul(y.transpose(-2, -1)) * mask).matmul(w)
-
-
-def normalize_weight(w, dim):
-    nrm_w = (w ** 2).sum(dim=dim, keepdim=True) ** 0.5
-    nrm_w[nrm_w == 0] = 1.
-    return w / nrm_w
+        return y.matmul(x) - (y.matmul(y.transpose(-2, -1)) * mask).matmul(w)
