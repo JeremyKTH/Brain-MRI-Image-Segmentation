@@ -7,7 +7,9 @@ class SoftWinnerTakesAll:
 
     def __call__(self, x, y, w):
         r = (y * self.__inverse_temperature).softmax(dim=-2)
-        return torch.einsum('bjn,bin->ji', r, x) - r.sum(dim=(0, 2)).unsqueeze(1) * w
+        #return torch.einsum('bjn,bin->ji', r, x) - r.sum(dim=(0, 2)).unsqueeze(1) * w
+        # einsum adds an additional overhead (~10%) --> matmul is more efficient
+        return r.transpose(1, 2).reshape(r.shape[1], -1).matmul(x.transpose(0, 1).reshape(-1, x.shape[1])) - r.sum(dim=(0, 2)).unsqueeze(1) * w
 
 
 class HebbianPCA:
